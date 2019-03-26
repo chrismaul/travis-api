@@ -24,22 +24,19 @@ module Travis
 
       private def archive_client
         @archive_client ||= ArchiveClient.new(
-          access_key_id: archive_s3_config[:access_key_id],
-          secret_access_key: archive_s3_config[:secret_access_key],
+          region: Travis.config.s3.region || 'us-east-1',
+          endpoint: Travis.config.s3.endpoint,
+          access_key_id: Travis.config.s3.access_key_id,
+          secret_access_key: Travis.config.s3.secret_access_key,
+          path_style: Travis.config.s3.force_path_style,
           bucket_name: archive_s3_bucket
         )
       end
 
       private def archive_s3_bucket
-        @archive_s3_bucket ||= [
-          Travis.env == 'staging' ? 'archive-staging' : 'archive',
-          Travis.config.host.split('.')[-2, 2]
-        ].flatten.compact.join('.')
+        @archive_s3_bucket ||= Travis.config.s3.hostname.split('.')[0]
       end
 
-      private def archive_s3_config
-        @archive_s3_config ||= Travis.config.log_options.s3.to_h
-      end
     end
 
     include Virtus.model(nullify_blank: true)
@@ -239,11 +236,15 @@ module Travis
     end
 
     class ArchiveClient
-      def initialize(access_key_id: nil, secret_access_key: nil, bucket_name: nil)
+      def initialize(access_key_id: nil, secret_access_key: nil, bucket_name: nil, endpoint: nil, region: nil)
         @bucket_name = bucket_name
         @s3 = Fog::Storage.new(
           aws_access_key_id: access_key_id,
           aws_secret_access_key: secret_access_key,
+          endpoint: endpoint,
+          path_style: path_style,
+          region: region,
+          host: endpoint && URI(endpoint).host,
           provider: 'AWS',
           instrumentor: ActiveSupport::Notifications,
           connection_options: { instrumentor: ActiveSupport::Notifications }
